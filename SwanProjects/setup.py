@@ -13,13 +13,6 @@ name = "swanprojects"
 
 lab_path = (HERE / name / "labextensions")
 
-# Representative files that should exist after a successful build
-ensured_targets = [
-    # str(lab_path / "package.json"), TODO
-    # str(lab_path / "static/style.js")
-]
-
-
 data_files_spec = [
     ("share/jupyter/labextensions/@swan/filebrowser-extension", "swanprojects/labextensions/@swan/filebrowser-extension", "**"),
     ("share/jupyter/labextensions/@swan/projects-extension", "swanprojects/labextensions/@swan/projects-extension", "**"),
@@ -67,16 +60,7 @@ setup_args = dict(
 )
 
 try:
-    from jupyter_packaging import (
-        wrap_installers,
-        npm_builder,
-        get_data_files
-    )
-    post_develop = npm_builder(
-        build_cmd="install:extension", source_dir="src", build_dir=lab_path
-    )
-    setup_args['cmdclass'] = wrap_installers(
-        post_develop=post_develop, ensured_targets=ensured_targets)
+    from jupyter_packaging import get_data_files
     setup_args['data_files'] = get_data_files(data_files_spec)
 except ImportError as e:
     print(e)
