@@ -5,7 +5,7 @@ __all__ = ["__version__"]
 
 
 def _fetchVersion():
-    HERE = Path(__file__).parent.resolve()
+    HERE = Path(__file__).parent.parent.resolve()
 
     for settings in HERE.rglob("package.json"):
         try:

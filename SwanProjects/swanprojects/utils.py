@@ -1,68 +1,49 @@
-
-# Copyright (c) SWAN Development Team.
-# Author: Omar.Zapata@cern.ch 2021
-
-"""
-This file has the class SwanUtils with several utility methods
-to handle projects and their environments.
-"""
+from logging import Logger
+from typing import Any, Union, TypedDict
+import os
+import json
+import pathlib
+import asyncio
 
 from traitlets.config import Configurable
-from swanprojects.config import SwanConfig
-import json
-import os
+from swanprojects.config import SwanProjectsConfig
+from notebook.services.contents.manager import ContentsManager
 
 
-class SwanUtils(Configurable):
+class SoftwareStack(TypedDict):
+    type: str
+    release: str
+    platform: str
+    user_script: str
 
-    def __init__(self, contents_manager):
+
+class ProjectUtils(Configurable):
+    def __init__(self, contents_manager: ContentsManager, log: Logger):
         self.contents_manager = contents_manager
-        self.swan_config = SwanConfig(config=self.config)
+        self.swan_config = SwanProjectsConfig(config=self.config)
+        self.log = log
 
-    def has_project_file(self, path):
-        """
-        Method to check if .swanproject exists
+    def has_project_file(self, project_folder_path: str) -> bool:
+        """Method to check if a swanproject file exists"""
+        return self.contents_manager.file_exists(
+            os.path.join(project_folder_path, self.swan_config.project_file_name)
+        )
 
-        Parameters
-        ----------
-        path : str
-            project path.
+    def get_project_root_path(self, folder_path: str) -> Union[str, None]:
+        """Return path of project that folder_path belongs to, or None"""
+        path = pathlib.PurePath(folder_path)
+        # recursively traverse parent folders to check if any are a project
+        for parent in [path, *path.parents]:
+            if parent == ".":
+                # jupyter represents the server root api_path with empty string to query contents API
+                parent = ""
+            if self.has_project_file(str(parent)):
+                return str(parent)
 
-        Returns
-        -------
-        bool
-            True if the project file .swanprojects was found.
-        """
-        return self.contents_manager.file_exists(os.path.join(path, self.swan_config.project_file_name))
+        # If path is not inside any project
+        return None
 
-    def get_project_path(self, path):
-        """
-        This method returns the project path, the contents_manager._get_project_path function
-        returns three possible values 'invalid', None or the path,
-        then if it is invalid I return just None to simplify the error control.
-
-        Invalid means for SwanContents a project outside of SWAN_projects folder.
-
-        Parameters
-        ----------
-        path : str
-            A path.
-
-        Returns
-        -------
-        path: str || None
-            The path to the project or None if not project found
-        """
-        if path.startswith(os.sep):
-            # removing '/' is required by swanconents otherwise it is invalid
-            path = path[1:]
-        path = self.contents_manager._get_project_path(path)
-        if path == 'invalid':
-            return None
-        else:
-            return path
-
-    def get_project_info(self, path):
+    def get_project_metadata(self, folder_path: str):
         """
         This method returns the project info such as stack, release, platform etc..
 
@@ -76,11 +57,12 @@ class SwanUtils(Configurable):
         path: Dict || None
             Project information in a dictionary or a empty dictionary in case of error.
         """
-        if self.has_project_file(path):
-            swanfile = os.path.join(path, self.swan_config.project_file_name)
-            swanfile_model = self.contents_manager.get(swanfile)
+        if self.has_project_file(folder_path):
+            swanfile_model = self.contents_manager.get(
+                os.path.join(folder_path, self.swan_config.project_file_name)
+            )
             try:
-                data = json.loads(swanfile_model['content'])
+                data = json.loads(swanfile_model["content"])
                 return data
             except Exception as e:
                 print(e)
@@ -88,90 +70,142 @@ class SwanUtils(Configurable):
         else:
             return {}
 
-    def get_user_script_content(self, project_path):
-        """
-        Returns the content of the user script saved in .user_script file.
+    async def edit_project(
+        self, folder_path: str, stack: SoftwareStack, user_script: str
+    ):
 
-        Parameters
-        ----------
-        path : str
-            A path to the project.
+        project_folder_path = self.get_project_root_path(folder_path) or folder_path
+        if project_folder_path is None:
+            project_folder_path = folder_path
 
-        Returns
-        -------
-        path: str
-            The content of the user script or an empty string the the project doesn't have a user script file.
-        """
-        user_script_path = os.path.join(
-            project_path, self.swan_config.userscript_file_name)
+        if folder_path in self.swan_config.forbidden_project_folders:
+            return {
+                "status": True,
+                "errorMessage": f"Cannot convert {folder_path or 'home directory'} into a project",
+            }
 
-        if self.contents_manager.file_exists(user_script_path):
-            user_script_path_model = self.contents_manager.get(
-                user_script_path)
-            return user_script_path_model['content']
+        if self.contents_manager.file_exists(project_folder_path):
+            return {
+                "status": False,
+                "errorMessage": f"There is already a file in {project_folder_path}",
+            }
+
+        if not self.contents_manager.dir_exists(project_folder_path):
+            return {
+                "status": False,
+                "errorMessage": f"The folder {project_folder_path} does not exist",
+            }
+
+        try:
+            await self.generate_project_environment(project_folder_path, stack)
+        except Exception as e:
+            return {
+                "status": False,
+                "errorMessage": f"Failed to generate environment for project {e}",
+            }
+
+        try:
+            self.save_project_file(project_folder_path, stack)
+        except Exception as e:
+            print(e)
+            return {
+                "status": False,
+                "errorMessage": "An unknown error occured writing the project metadata",
+            }
+
+        return {"status": True}
+
+    async def generate_project_environment(
+        self, project_folder_path: str, stack: SoftwareStack
+    ):
+        if stack["type"] == "default":
+            environment_file_path = os.path.join(
+                project_folder_path, self.swan_config.environment_file_name
+            )
+            if self.contents_manager.file_exists(environment_file_path):
+                self.contents_manager.delete_file(environment_file_path)
+
+            return
+
+        stacks_folder = pathlib.Path(self.swan_config.stacks_path)
+        setup_script_path = stacks_folder / stack["type"] / "setup.sh"
+
+        if not setup_script_path.is_file():
+            stacks_folder = str(stacks_folder / stack["type"])
+            raise Exception(f"Unknown software stack type.")
+        process = await asyncio.create_subprocess_exec(
+            "/bin/bash",
+            "-c",
+            f"source '{setup_script_path}' && printenv",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={
+                "RELEASE": stack.get("release"),
+                "PLATFORM": stack.get("platform"),
+                "SWAN_PROJECT_PATH": project_folder_path,
+            },
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            self.log.error(
+                f"RETURNCODE: {process.returncode}, STDOUT:\n {stdout}\n, STDERR: \nf{stderr}\n"
+            )
+            raise Exception(
+                f"Error generating environment with output {stdout}, {stderr}, {process.returncode}"
+            )
+        self.save_environment_file(project_folder_path, stdout.decode("utf-8"))
+
+    def save_environment_file(self, project_folder_path: str, environment: str):
+        environment_file_path = os.path.join(
+            project_folder_path, self.swan_config.environment_file_name
+        )
+        model = {
+            "name": self.swan_config.environment_file_name,
+            "path": environment_file_path,
+            "type": "file",
+            "content": environment,
+            "format": "text",
+        }
+        self.contents_manager.save(model, environment_file_path)
+
+    def save_project_file(self, project_folder_path: str, stack: Any):
+        metadata_file_path = os.path.join(
+            project_folder_path, self.swan_config.project_file_name
+        )
+        model = {
+            "name": self.swan_config.project_file_name,
+            "path": metadata_file_path,
+            "type": "file",
+            "content": json.dumps({"stack": stack}),
+            "format": "text",
+        }
+        self.contents_manager.save(model, metadata_file_path)
+
+    def save_user_script_file(self, project_folder_path: str, user_script: str):
+        user_script_file_path = os.path.join(
+            project_folder_path, self.swan_config.project_file_name
+        )
+        if not user_script and self.contents_manager.file_exists(user_script_file_path):
+            # If the script was removed, delete any existing file
+            self.contents_manager.delete_file(user_script_file_path)
         else:
-            return ""
+            model = {
+                "name": self.swan_config.project_file_name,
+                "path": user_script_file_path,
+                "type": "file",
+                "content": user_script,
+                "format": "text",
+            }
+            self.contents_manager.save(model, user_script_file_path)
 
-    def get_project_name(self, project_path):
-        """
-        Returns the project name.
-
-        Parameters
-        ----------
-        path : str
-            A path to the project.
-
-        Returns
-        -------
-        path: str || None
-            The name of the project or None is the path provided is not a project.
-        """
-
-        path = self.get_project_path(project_path)
-        name = None
-        if path is not None:
-            name = path.split(os.sep)[-1]
-        return name
-
-    def check_project_info(self, project_info):
-        """
-        Allows to check if the .swanproject file content is corrupted.
-
-        Parameters
-        ----------
-        path : Dict
-            Project information such as stack, release, platform etc...
-
-        Returns
-        -------
-        path: Dict
-            Dict with the status and missing fields in case of error.
-        """
-        project_keys = ["stack", "platform", "release",
-                        "user_script", "python3", "python2", "kernel_dirs"]
-        not_found = []
-        status = True
-        for key in project_keys:
-            if key not in project_info.keys():
-                status = False
-                not_found.append(key)
-        return {"status": status, "not_found": not_found}
-
-    def get_env_isolated(self):
-        """
-        Command line required with environment variables to isolate execution.
-        """
-        command = ["env", "-i", "HOME=%s" % os.environ["HOME"]]
-        # checking if we are on EOS to add the env variables
-        # we required this to read/write in a isolate environment with EOS
-        if "OAUTH2_TOKEN" in os.environ:
-            command.append("OAUTH2_TOKEN=%s" % os.environ["OAUTH2_TOKEN"])
-
-        # special case when the package was not installed like root, useful for development
-        command.append(
-            "PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:{}/.local/bin/".format(os.environ["HOME"]))
-        command.append(
-            "LD_LIBRARY_PATH=/usr/lib:/usr/local/lib"
+    def get_user_script_content(self, project_folder_path: str):
+        """Returns the content of the user script saved in .user_script file or empty string"""
+        user_script_path = os.path.join(
+            project_folder_path, self.swan_config.userscript_file_name
         )
 
-        return command
+        if self.contents_manager.file_exists(user_script_path):
+            user_script_path_model = self.contents_manager.get(user_script_path)
+            return user_script_path_model["content"]
+        else:
+            return ""

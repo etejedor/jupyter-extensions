@@ -11,13 +11,8 @@ HERE = Path(__file__).parent.resolve()
 # The name of the project
 name = "swanprojects"
 
-lab_path = (HERE / name / "labextensions")
-
 data_files_spec = [
-    ("share/jupyter/labextensions/@swan/filebrowser-extension", "swanprojects/labextensions/@swan/filebrowser-extension", "**"),
-    ("share/jupyter/labextensions/@swan/projects-extension", "swanprojects/labextensions/@swan/projects-extension", "**"),
-    ("share/jupyter/labextensions/@swan/launcher-extension", "swanprojects/labextensions/@swan/launcher-extension", "**"),
-    ("share/jupyter/labextensions/@swan/terminal-extension", "swanprojects/labextensions/@swan/terminal-extension", "**"),
+    ("share/jupyter/labextensions/@swan/projects-extension", "swanprojects/labextension/@swan/projects-extension", "**"),
     ("etc/jupyter/jupyter_server_config.d", "jupyter-config/server-config", "swanprojects.json"),
     # For backward compatibility with notebook server
     ("etc/jupyter/jupyter_notebook_config.d", "jupyter-config/nb-config", "swanprojects.json")
@@ -37,7 +32,6 @@ setup_args = dict(
     license=pkg_json["license"],
     long_description=long_description,
     long_description_content_type="text/markdown",
-    scripts=['bin/swan_env', 'bin/swan_bash', 'bin/swan_kmspecs'],
     packages=setuptools.find_packages(),
     install_requires=[
         "jupyter_server>=1.6,<2"

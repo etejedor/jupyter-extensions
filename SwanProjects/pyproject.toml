@@ -2,11 +2,6 @@
 requires = ["jupyter_packaging~=0.10,<2", "jupyterlab~=3.0"]
 build-backend = "jupyter_packaging.build_api"
 
-# [tool.jupyter-packaging.options]
-# TODO
-# skip-if-exists = ["swanprojects/labextension/static/style.js"]
-# ensured-targets = ["swanprojects/labextension/static/style.js", "swanprojects/labextension/package.json"]
-
 [tool.jupyter-packaging.builder]
 factory = "jupyter_packaging.npm_builder"
 
@@ -15,4 +10,4 @@ build_cmd = "build:prod"
 npm = ["jlpm"]
 
 [tool.check-manifest]
-ignore = ["swanprojects/labextensions/**", "yarn.lock", ".*", "package-lock.json"]
+ignore = ["swanprojects/labextension/**", "yarn.lock", ".*", "package-lock.json"]

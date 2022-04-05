@@ -1,14 +1,15 @@
 # SwanProjects
 
 Server and Lab extension that provides:
-* In the backend, the endpoints to:
-  * Create and edit projects
-  * Get project information
-  * Get software stack information
-  * A customized Kernel Spec Manager to handle kernel metadata
-* In the Lab extension:
-  * React dialogs to create and edit projects
-  * LabIcons required for the dialogs
+
+- In the backend, the endpoints to:
+  - Create and edit projects
+  - Get project information
+  - Get software stack information
+  - A customized Kernel Spec Manager to handle kernel metadata
+- In the Lab extension:
+  - React dialogs to create and edit projects
+  - LabIcons required for the dialogs
 
 ## Requirements
 
