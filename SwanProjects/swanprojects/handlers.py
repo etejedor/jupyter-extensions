@@ -12,9 +12,9 @@ import jupyter_server.serverapp
 
 
 class BaseHandler(APIHandler):
-    def initialize(self):
+    def initialize(self, root_dir: str):
         self.swan_config = SwanProjectsConfig(config=self.config)
-        self.swan_utils = ProjectUtils(self.contents_manager, self.log)
+        self.swan_utils = ProjectUtils(self.contents_manager, self.log, root_dir)
 
 
 class ProjectsHandler(BaseHandler):
@@ -72,13 +72,23 @@ class SoftwareStacksHandler(BaseHandler):
         self.finish(json.dumps({"stacks": stacks}))
 
 
-def setup_handlers(web_app: jupyter_server.serverapp.ServerWebApplication):
+def setup_handlers(
+    web_app: jupyter_server.serverapp.ServerWebApplication, root_dir: str
+):
     host_pattern = ".*$"
     base_url = web_app.settings["base_url"]  # type: str
     custom_prefix = "swan"
 
     handlers = [
-        (url_path_join(base_url, custom_prefix, "projects/(.*)"), ProjectsHandler),
-        (url_path_join(base_url, custom_prefix, "stacks"), SoftwareStacksHandler),
+        (
+            url_path_join(base_url, custom_prefix, "projects/(.*)"),
+            ProjectsHandler,
+            {"root_dir": root_dir},
+        ),
+        (
+            url_path_join(base_url, custom_prefix, "stacks"),
+            SoftwareStacksHandler,
+            {"root_dir": root_dir},
+        ),
     ]
     web_app.add_handlers(host_pattern, handlers)

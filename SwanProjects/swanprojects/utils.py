@@ -18,10 +18,11 @@ class SoftwareStack(TypedDict):
 
 
 class ProjectUtils(Configurable):
-    def __init__(self, contents_manager: ContentsManager, log: Logger):
+    def __init__(self, contents_manager: ContentsManager, log: Logger, root_dir: str):
         self.contents_manager = contents_manager
         self.swan_config = SwanProjectsConfig(config=self.config)
         self.log = log
+        self.root_dir = root_dir
 
     def has_project_file(self, project_folder_path: str) -> bool:
         """Method to check if a swanproject file exists"""
@@ -142,7 +143,9 @@ class ProjectUtils(Configurable):
             env={
                 "RELEASE": stack.get("release"),
                 "PLATFORM": stack.get("platform"),
-                "SWAN_PROJECT_PATH": project_folder_path,
+                "SWAN_PROJECT_PATH": os.path.join(
+                    os.path.abspath(self.root_dir), project_folder_path
+                ),
             },
         )
         stdout, stderr = await process.communicate()

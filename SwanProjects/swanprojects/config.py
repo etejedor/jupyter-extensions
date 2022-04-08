@@ -26,4 +26,4 @@ class SwanProjectsConfig(Configurable):
         ".userscript", config=False, help="User script file name."
     )  # type: str
 
-    forbidden_project_folders = ["", "SWAN_Projects"]
+    forbidden_project_folders = ["", "SWAN_projects"]
