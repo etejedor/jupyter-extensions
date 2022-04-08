@@ -5,6 +5,7 @@ recursive-include jupyter-config *.json
 
 include swanprojects/kernelmanager/resources/*
 include swanprojects/stacks/*/*
+include swanprojects/kernels/*/*
 include swanprojects/static/index.html
 include package.json
 include install.json

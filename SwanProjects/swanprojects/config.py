@@ -16,11 +16,11 @@ class SwanProjectsConfig(Configurable):
 
     project_file_name = Unicode(
         "swanproject.json", config=False, help="Project file name."
-    )
+    ) # type: str
 
     environment_file_name = Unicode(
         "swan-environment.lock", config=False, help="Environment file name"
-    )
+    ) # type: str
 
     userscript_file_name = Unicode(
         ".userscript", config=False, help="User script file name."

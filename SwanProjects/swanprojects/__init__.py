@@ -1,7 +1,7 @@
 from .handlers import setup_handlers
 from ._version import __version__
 import jupyter_server.serverapp
-
+from .swanprovisioner import SwanProvisioner
 
 def _jupyter_labextension_paths():
     return [

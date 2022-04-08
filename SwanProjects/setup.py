@@ -51,6 +51,11 @@ setup_args = dict(
         "Programming Language :: Python :: 3.9",
         "Framework :: Jupyter",
     ],
+    entry_points={
+        "jupyter_client.kernel_provisioners": [
+            "swan-provisioner = swanprojects:SwanProvisioner",
+        ],
+    }
 )
 
 try:
